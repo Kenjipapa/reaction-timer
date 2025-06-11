@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Reaction Timer Game</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 50px;
+      background: #f0f0f0;
+    }
+    #game, #leaderboard {
+      margin-top: 30px;
+    }
+    .hidden {
+      display: none;
+    }
+    button {
+      font-size: 18px;
+      padding: 10px 20px;
+      margin: 10px;
+    }
+    table {
+      margin: 20px auto;
+      border-collapse: collapse;
+      width: 60%;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+    }
+    input {
+      padding: 8px;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🎯 Reaction Timer Game</h1>
+
+<div id="intro">
+  <p>Click "Start" and wait for the screen to turn green. Then click as fast as you can!</p>
+  <input type="text" id="playerName" placeholder="Enter your name" />
+  <br />
+  <button onclick="startGame()">Start</button>
+</div>
+
+<div id="game" class="hidden">
+  <h2 id="status">Wait for green...</h2>
+</div>
+
+<h2>🏆 Leaderboard</h2>
+<table id="leaderboard">
+  <thead>
+    <tr>
+      <th>Rank</th>
+      <th>Name</th>
+      <th>Time (ms)</th>
+      <th>When</th>
+    </tr>
+  </thead>
+  <tbody id="leaderboardBody">
+    <tr><td colspan="4">Loading...</td></tr>
+  </tbody>
+</table>
+
+<script>
+const API_KEY = "$2a$10$acF75QI44J1BunUXTWX37ObW8RSpTynjvYgqotEUUYrD.aWHQeypW";
+const BIN_ID = "68494f898a456b7966ac3518";
+const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
+let startTime, endTime;
+let timeout;
+
+const gameDiv = document.getElementById("game");
+const introDiv = document.getElementById("intro");
+const statusText = document.getElementById("status");
+const leaderboardBody = document.getElementById("leaderboardBody");
+
+function startGame() {
+  const name = document.getElementById("playerName").value.trim();
+  if (!name) {
+    alert("Please enter your name.");
+    return;
+  }
+
+  introDiv.classList.add("hidden");
+  gameDiv.classList.remove("hidden");
+  statusText.textContent = "Wait for green...";
+  document.body.style.backgroundColor = "#f44336";
+
+  timeout = setTimeout(() => {
+    document.body.style.backgroundColor = "#4CAF50";
+    statusText.textContent = "Click!";
+    startTime = new Date().getTime();
+  }, Math.random() * 3000 + 2000);
+}
+
+document.body.addEventListener("click", () => {
+  if (!startTime) {
+    if (!timeout) return;
+    clearTimeout(timeout);
+    alert("Too soon! Wait for green.");
+    reset();
+  } else {
+    endTime = new Date().getTime();
+    const reactionTime = endTime - startTime;
+    statusText.textContent = `Your time: ${reactionTime} ms`;
+    document.body.style.backgroundColor = "#f0f0f0";
+    saveScore(reactionTime);
+    startTime = null;
+    setTimeout(reset, 3000);
+  }
+});
+
+function reset() {
+  introDiv.classList.remove("hidden");
+  gameDiv.classList.add("hidden");
+  loadLeaderboard();
+}
+
+async function loadLeaderboard() {
+  try {
+    const response = await fetch(BIN_URL + "/latest", {
+      headers: { "X-Master-Key": API_KEY }
+    });
+    const data = await response.json();
+    const scores = data.record.scores || [];
+
+    scores.sort((a, b) => a.time - b.time);
+    const top = scores.slice(0, 5);
+
+    leaderboardBody.innerHTML = "";
+    top.forEach((entry, i) => {
+      leaderboardBody.innerHTML += `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${entry.name}</td>
+          <td>${entry.time}</td>
+          <td>${new Date(entry.timestamp).toLocaleString()}</td>
+        </tr>`;
+    });
+  } catch (err) {
+    console.error("Error loading leaderboard:", err);
+    leaderboardBody.innerHTML = "<tr><td colspan='4'>Error loading leaderboard</td></tr>";
+  }
+}
+
+async function saveScore(time) {
+  const name = document.getElementById("playerName").value.trim();
+  const newEntry = { name, time, timestamp: Date.now() };
+
+  try {
+    const response = await fetch(BIN_URL + "/latest", {
+      headers: { "X-Master-Key": API_KEY }
+    });
+    const data = await response.json();
+    const currentScores = data.record.scores || [];
+
+    currentScores.push(newEntry);
+
+    await fetch(BIN_URL, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Master-Key": API_KEY,
+        "X-Bin-Versioning": false
+      },
+      body: JSON.stringify({ scores: currentScores })
+    });
+  } catch (err) {
+    console.error("Failed to save score:", err);
+  }
+}
+
+loadLeaderboard();
+</script>
+
+</body>
+</html>
